@@ -3,14 +3,6 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashMap;
 
-// struct Node<'a> {
-//     name: Box<&'a str>,
-//     parent: Option<Box<Node<'a>>>,
-//     subdirs: Vec<Box<Node<'a>>>,
-//     files: HashMap<String, usize>,
-//     size: usize,
-// }
-
 struct Arena {
     nodes: Vec<Node>,
 }
@@ -20,7 +12,7 @@ struct Node {
     parent: Option<usize>,
     subdirs: Vec<usize>,
     files: HashMap<String, usize>,
-    size: usize,
+    files_size: usize,
 }
 
 fn new_node(arena: &mut Arena, name: String, parent: Option<usize>) -> usize {
@@ -31,15 +23,13 @@ fn new_node(arena: &mut Arena, name: String, parent: Option<usize>) -> usize {
         parent: parent, 
         subdirs: Vec::new(),
         files: HashMap::new(),
-        size: 0,
+        files_size: 0,
     });
     
     return next_index;
 }
-    
 
 fn main() {
-    const CHALLENGE_PART_2: bool = true;
     let mut arena = Arena { nodes: Vec::new() };
     let root = new_node(&mut arena, String::from("root"), None);
     let mut cur_node = root;
@@ -70,7 +60,7 @@ fn main() {
                         let new_node = new_node(&mut arena, dirname.to_string(), Some(cur_node));
                         arena.nodes[cur_node].subdirs.push(new_node);
                         cur_node = new_node;
-                        println!("node {cur_node}: Added new child {new_node}");
+                        // println!("node {cur_node}: Added new child {new_node}");
                     }
                 } else if line.starts_with("$ ls") {
                     // boring, nothing to do
@@ -88,7 +78,7 @@ fn main() {
                     if !found {
                         let new_node = new_node(&mut arena, dirname.to_string(), Some(cur_node));
                         arena.nodes[cur_node].subdirs.push(new_node);
-                        println!("node {cur_node}: Added new child {new_node}");
+                        // println!("node {cur_node}: Added new child {new_node}");
                     }
                     
                 } else /* size_bytes filename */ {
@@ -96,8 +86,8 @@ fn main() {
                     let vals = line.split(' ').collect::<Vec<&str>>();
                     if let Ok(filesize) = vals[0].parse::<usize>() {
                         arena.nodes[cur_node].files.insert(vals[1].to_string(), filesize);
-                        arena.nodes[cur_node].size += filesize;
-                        println!("node {cur_node} file: {} {filesize}B", vals[1]);
+                        arena.nodes[cur_node].files_size += filesize;
+                        // println!("node {cur_node} file: {} {filesize}B", vals[1]);
                     }
                     
                 }
@@ -105,9 +95,54 @@ fn main() {
         }
     }
     
-    let mut dfs_stack: Vec<usize> = Vec::new();
-    cur_node = root;
+    let (total_size, sum_below_100k) = sum_dirs_below_100k(&arena, root);
+    println!("Sum of those dirs below 100kb {sum_below_100k}");
+    let free_disk_space = 70_000_000 - total_size;
+    let required_deletion_size = 30_000_000 - free_disk_space;
+    println!("need to free up {required_deletion_size}");
+    let (_, smallest) = smallest_dir_to_delete(&arena, root, required_deletion_size);
+    println!("Smallest dir to delete: {smallest} bytes");
+}
+
+fn sum_dirs_below_100k(arena: &Arena, dir_node: usize) -> (usize, usize) {
+    let mut total_size = 0;
+    let mut sum_below_100k = 0;
     
+    for subdir in arena.nodes[dir_node].subdirs.iter() {
+        let (temp_total, temp_sum) = sum_dirs_below_100k(arena, *subdir);
+        total_size += temp_total;
+        sum_below_100k += temp_sum;
+    }
+    
+    total_size += arena.nodes[dir_node].files_size;
+    
+    if total_size <= 100000 {
+        sum_below_100k += total_size;
+    }
+    
+    return (total_size, sum_below_100k);
+}
+
+
+fn smallest_dir_to_delete(arena: &Arena, dir_node: usize, required_space: usize) -> (usize, usize) {
+    let mut smallest_deletion = 100_000_000;
+    let mut total_size = 0;
+    
+    for subdir in arena.nodes[dir_node].subdirs.iter() {
+        let (temp_total, temp_smallest) = smallest_dir_to_delete(arena, *subdir, required_space);
+        total_size += temp_total;
+        if temp_smallest >= required_space && temp_smallest < smallest_deletion { 
+            smallest_deletion = temp_smallest; 
+        }
+    }
+    
+    total_size += arena.nodes[dir_node].files_size;
+    
+    if total_size >= required_space && total_size < smallest_deletion {
+        smallest_deletion = total_size;
+    }
+    
+    return (total_size, smallest_deletion);
 }
 
 // The output is wrapped in a Result to allow matching on errors
