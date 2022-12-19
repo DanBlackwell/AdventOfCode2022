@@ -29,7 +29,6 @@ fn main() {
                 if line.len() == 0 { continue; }
 
                 let mut new_blueprint: Blueprint = Vec::new();
-                // println!("New line {line}");
                 
                 let robots = line.split(":").nth(1).unwrap();
                 for robot_str in robots.split(".") {
@@ -57,11 +56,8 @@ fn main() {
                     let in1 = parse_resource(split.nth(0));
 
                     let robot: Robot;
-                    // println!("{:?} {}", split.clone(), split.clone().count());
-
                     if split.clone().count() > 1 {
                         let in_quant_2 = split.nth(1).unwrap().parse::<usize>().unwrap();
-                        // println!("split: {:?}", split.clone().collect::<Vec<&str>>());
                         let in2 = parse_resource(split.nth(0));
 
                         robot = Robot {
@@ -83,24 +79,14 @@ fn main() {
         }
     }
 
-    println!("{:?}", blueprints);
-
     let mut quality_total = 0;
+    let mut part_2_total = 1;
 
     // Blueprint 1: Each ore robot costs 4 ore. 
     // Each clay robot costs 2 ore. 
     // Each obsidian robot costs 3 ore and 14 clay. 
     // Each geode robot costs 2 ore and 7 obsidian.
     for (index, blueprint) in blueprints.into_iter().enumerate() {
-        let mut ore_count = 0;
-        let mut ore_robots = 1;
-        let mut clay_count = 0;
-        let mut clay_robots = 0;
-        let mut obsidian_count = 0;
-        let mut obsidian_robots = 0;
-        let mut geode_count = 0;
-        let mut geode_robots = 0;
-
         let get_robot = |resource: Resource| -> &Robot {
             let robots: Vec<&Robot> = blueprint
                 .iter()
@@ -109,11 +95,6 @@ fn main() {
             if robots.len() != 1 { panic!(""); }
             return robots[0];
         };
-
-        let ore_robot = get_robot(Resource::Ore);
-        let clay_robot = get_robot(Resource::Clay);
-        let obsidian_robot = get_robot(Resource::Obsidian);
-        let geode_robot = get_robot(Resource::Geode);
 
         let mut max_rates = [0; 4];
         for i in 0..4 {
@@ -141,36 +122,41 @@ fn main() {
             };
         }
 
-        let max = dfs(&blueprint, FactoryState {
-                time: 0,
+        let initial_state = FactoryState {
+            time: 1,
 
-                ore_robot_plan: get_robot(Resource::Ore),
-                clay_robot_plan: get_robot(Resource::Clay),
-                obsidian_robot_plan: get_robot(Resource::Obsidian),
-                geode_robot_plan: get_robot(Resource::Geode),
+            ore_robot_plan: get_robot(Resource::Ore),
+            clay_robot_plan: get_robot(Resource::Clay),
+            obsidian_robot_plan: get_robot(Resource::Obsidian),
+            geode_robot_plan: get_robot(Resource::Geode),
 
-                ore_robots: 1,
-                clay_robots: 0,
-                obsidian_robots: 0,
-                geode_robots: 0,
+            ore_robots: 1,
+            clay_robots: 0,
+            obsidian_robots: 0,
+            geode_robots: 0,
 
-                ore_count: 0,
-                clay_count: 0,
-                obsidian_count: 0,
-                geode_count: 0,
+            ore_count: 0,
+            clay_count: 0,
+            obsidian_count: 0,
+            geode_count: 0,
 
-                max_ore_robots_per_min: max_rates[0],
-                max_clay_robots_per_min: max_rates[1],
-                max_obsidian_robots_per_min: max_rates[2],
-                max_geode_robots_per_min: max_rates[3],
-            },
-            1);
+            max_ore_robots_per_min: max_rates[0],
+            max_clay_robots_per_min: max_rates[1],
+            max_obsidian_robots_per_min: max_rates[2],
+        };
 
-        println!("Max geodes: {max}");
+        let max = dfs(&blueprint, initial_state.clone(), 1, 24);
         quality_total += (index + 1) * max;
+
+        if index < 3 {
+            let max = dfs(&blueprint, initial_state, 1, 32);
+            part_2_total *= max;
+        }
+        println!("Processed {index}");
     }
 
-    println!("Quality total: {quality_total}");
+    println!("Part 1 Quality total: {quality_total}");
+    println!("Part 2 total: {part_2_total}");
 }
 
 #[derive(Debug, Clone)]
@@ -195,7 +181,6 @@ struct FactoryState<'a> {
     max_ore_robots_per_min: usize,
     max_clay_robots_per_min: usize,
     max_obsidian_robots_per_min: usize,
-    max_geode_robots_per_min: usize
 }
 
 fn can_create_robot_instance(robot: &Robot, state: &FactoryState) -> bool {
@@ -227,8 +212,6 @@ fn create_robot_instance(robot: &Robot, state: &mut FactoryState) {
         Resource::Obsidian => state.obsidian_robots += 1,
         Resource::Geode => state.geode_robots += 1,
     }
-
-    // println!("ore: {ore_count}, clay: {clay_count}, obisidian: {obsidian_count}, geodes: {geode_count}");
 }
 
 fn do_nothing(state: &mut FactoryState) {
@@ -239,35 +222,33 @@ fn do_nothing(state: &mut FactoryState) {
     state.geode_count += state.geode_robots;
 }
 
-fn dfs(blueprint: &Blueprint, state: FactoryState, depth: usize) -> usize {
-    // println!("Depth: {depth}, state: {:?}", state);
-
-    if state.time > 23 { println!("Shouldn't be here"); return 0; }
+fn dfs(blueprint: &Blueprint, state: FactoryState, depth: usize, max_time: usize) -> usize {
+    if state.time > max_time { panic!(); }
     let mut cur_state = state.clone();
-    // do_nothing(&mut cur_state);
 
     let mut max_geodes = 0;
     for i in 0..4 {
-        // println!("Max robots for ore: {}", max_robots_from_inventory(Resource::Ore));
 
         let robot_plan: &Robot;
          match i {
             0 => { robot_plan = state.geode_robot_plan; },
             1 => {
-                if cur_state.obsidian_count > state.max_obsidian_robots_per_min * (24 - cur_state.time) { continue; }
+                // Don't build more robots than we could use the output of
+                if cur_state.obsidian_count > state.max_obsidian_robots_per_min * (max_time - cur_state.time) { continue; }
                 robot_plan = state.obsidian_robot_plan;
             },
             2 => {
-                if cur_state.clay_count > state.max_clay_robots_per_min * (24 - cur_state.time) { continue; }
+                if cur_state.clay_count > state.max_clay_robots_per_min * (max_time - cur_state.time) { continue; }
                 robot_plan = state.clay_robot_plan;
             },
             3 => {
-                if cur_state.ore_count > state.max_ore_robots_per_min * (24 - cur_state.time) { continue; }
+                if cur_state.ore_count > state.max_ore_robots_per_min * (max_time - cur_state.time) { continue; }
                 robot_plan = state.ore_robot_plan;
             },
             _ => panic!()
         };
 
+        // Don't try to wait for resources to build a robot if we aren't mining that resource
         let mut are_mining_resources = true;
         for (resource, _) in robot_plan.inputs.iter() {
             match resource {
@@ -281,22 +262,22 @@ fn dfs(blueprint: &Blueprint, state: FactoryState, depth: usize) -> usize {
 
         let mut loop_state = cur_state.clone();
 
-        let mut out_of_time = loop_state.time >= 23;
+        let mut out_of_time = loop_state.time >= max_time;
         while !out_of_time && !can_create_robot_instance(robot_plan, &loop_state) {
             do_nothing(&mut loop_state);
             // If we can't create a new one in time, that's fine as we calc the run to end below
-            if loop_state.time >= 23 { out_of_time = true; }
+            if loop_state.time >= max_time { out_of_time = true; }
         }
         if out_of_time { continue; }
 
         do_nothing(&mut loop_state);
 
         create_robot_instance(robot_plan, &mut loop_state);
-        let outcome = dfs(blueprint, loop_state.clone(), depth + 1);
+        let outcome = dfs(blueprint, loop_state.clone(), depth + 1, max_time);
         if outcome > max_geodes { max_geodes = outcome; }
     }
 
-    while cur_state.time < 24 {
+    while cur_state.time <= max_time {
         do_nothing(&mut cur_state);
     }
     max_geodes = std::cmp::max(cur_state.geode_count, max_geodes); 
