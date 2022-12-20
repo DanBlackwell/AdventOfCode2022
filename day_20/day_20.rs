@@ -2,9 +2,19 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::vec::Vec;
-use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+struct Node {
+    value: i64,
+    next: usize,
+    prev: usize,
+    original_index: usize
+}
 
 fn main() {
+    let mut arena: Vec<Node> = Vec::new();
+    let mut arena_pt_2: Vec<Node> = Vec::new();
+    let mut prev = 0;
     let mut initial_array = Vec::new();
 
     if let Ok(lines) = read_lines("./input.txt") {
@@ -13,95 +23,96 @@ fn main() {
             if let Ok(line) = line {
                 if line.len() == 0 { continue; }
                 
-                initial_array.push(line.parse::<i64>().unwrap());
+                let val = line.parse::<i64>().unwrap();
+
+                let arena_size = arena.len();
+                if arena_size > 0 {
+                    arena[arena_size - 1].next = arena_size;
+                    arena_pt_2[arena_size - 1].next = arena_size;
+                }
+
+                let mut node = Node {
+                    value: val,
+                    next: 0,
+                    prev: prev,
+                    original_index: arena_size
+                };
+                arena.push(node.clone());
+
+                node.value *= 811589153;
+                arena_pt_2.push(node);
+
+                prev = arena_size;
+
+                initial_array.push(val);
             }
         }
     }
 
-    println!("initial_array: {:?}", initial_array);
+    let arena_size = arena.len();
+    arena[0].prev = arena_size - 1;
+    arena_pt_2[0].prev = arena_size - 1;
 
-    // let mut start_to_cur_pos = initial_array.clone().into_iter()
-    //     .enumerate()
-    //     .fold(HashMap::new(), |mut map, (idx, x)| { map.insert(idx, idx); return map; });
-    let mut start_to_cur_pos = Vec::new();
-    for i in 0..initial_array.len() { start_to_cur_pos.push(i); }
-    // println!("start_to_cur_pos: {:?}", start_to_cur_pos);
-
-    let len = initial_array.len();
-    for (index, value) in initial_array.iter().enumerate() {
-        let mov_dist = value % (len - 1) as i64;
-        let cur_pos = start_to_cur_pos[index];
-        let mut insert_index;
-
-        if mov_dist < 0 {
-            // println!("mov_dist < 0");
-            // println!("cur_pos: {cur_pos}, mov_dist: {mov_dist}");
-            if (cur_pos as i64) <= -mov_dist {
-                // println!("cur_pos < -mov_dist, cur_pos - mov_dist: {:?}", (cur_pos as i64) - mov_dist);
-                // println!("len: {len}");
-                insert_index = len - 1 - ((cur_pos as i64) + mov_dist).abs() as usize;
-                // println!("insert_index: {insert_index}");
+    fn decrypt_once(arena: &mut Vec<Node>) {
+        let mut index = 0;
+        let arena_size = arena.len();
+        for i in 0..arena_size {
+            while arena[index].original_index != i { index = arena[index].next; }
+            let mut cur_node = arena[index].clone();
+            let moves = cur_node.value % (arena_size as i64 - 1);
+            if moves < 0 {
+                for _ in moves..0 {
+                    let prev_node_pos = cur_node.prev;
+                    let mut prev_node = arena[prev_node_pos].clone();
+                    let this_node_pos = prev_node.next;
+                    prev_node.next = cur_node.next;
+                    cur_node.prev = prev_node.prev;
+                    cur_node.next = this_node_pos;
+                    prev_node.prev = prev_node_pos;
+                    arena[this_node_pos] = prev_node;
+                    arena[prev_node_pos] = cur_node.clone();
+                }
             } else {
-                // println!("cur_pos >= -mov_dist");
-                insert_index = ((cur_pos as i64) + mov_dist) as usize;
+                for _ in 0..moves {
+                    let next_node_pos = cur_node.next;
+                    let mut next_node = arena[next_node_pos].clone();
+                    let this_node_pos = next_node.prev;
+                    next_node.prev = cur_node.prev;
+                    cur_node.next = next_node.next;
+                    cur_node.prev = this_node_pos;
+                    next_node.next = next_node_pos;
+                    arena[this_node_pos] = next_node;
+                    arena[next_node_pos] = cur_node.clone();
+                }
             }
-        } else {
-            if cur_pos + (mov_dist as usize) > len {
-                insert_index = ((cur_pos as i64) + mov_dist) as usize - len + 1;
-            } else {
-                insert_index = ((cur_pos as i64) + mov_dist) as usize;
-            }
-        }
-
-        // if mov_dist <= cur_pos
-        // if mov_dist <= -len || insert_index == 0 && cur_pos != 0 { insert_index = len - 1; }
-        // else if insert_index == len - 1 && cur_pos != len - 1 { insert_index = 0; }
-        // println!("Moving value: {value} from index {cur_pos} to {insert_index}");
-        // println!("{:?}", start_to_cur_pos);
-
-        start_to_cur_pos = start_to_cur_pos
-            .iter()
-            .map(|&index| 
-                    if index == cur_pos {
-                        insert_index
-                    } else if insert_index > cur_pos {
-                        // println!("moved to later in the array index: {index}, insert_index: {insert_index}, cur_pos: {cur_pos}");
-                        if index <= insert_index && index > cur_pos { index - 1 }  
-                        else { index }
-                    } else if insert_index < cur_pos {
-                        // println!("moved to earlier in the array");
-                        if index >= insert_index && index < cur_pos { index + 1 }
-                        else { index }
-                    } else { index }
-                )
-            .collect::<Vec<usize>>();
-        // println!("start_to_cur_pos after {value} (insert_index: {insert_index}): {:?}", start_to_cur_pos);
-        // print!("list: [");
-        // for i in 0..initial_array.len() {
-        //     for (index, j) in start_to_cur_pos.iter().enumerate() {
-        //         if *j == i { print!("{}, ", initial_array[index]); }
-        //     }
-        // }
-        // for i in start_to_cur_pos.iter() {
-        //     print!("{}, ", initial_array[*i]);
-        // }
-        // println!("]");
-    }
-
-    let mut final_list = Vec::new();
-    for i in 0..initial_array.len() {
-        for (index, j) in start_to_cur_pos.iter().enumerate() {
-            if *j == i { final_list.push(initial_array[index]); }
         }
     }
 
-    let len = final_list.len();
-    let mut zero_pos = 0;
-    for i in 0..len { if final_list[i] == 0 { zero_pos = i; break; } }
-    let thou = final_list[(zero_pos + 1000) % len];
-    let two_thou = final_list[(zero_pos + 2000) % len];
-    let three_thou = final_list[(zero_pos + 3000) % len];
-    println!("1000: {thou}, 2000: {two_thou}, 3000: {three_thou}, sum: {}", thou + two_thou + three_thou);
+    decrypt_once(&mut arena);
+
+    fn print_result(arena: &Vec<Node>) {
+        let mut temp = &arena[0];
+        while temp.value != 0 {
+            temp = &arena[temp.next];
+        }
+
+        let mut total = 0;
+        for thou in 1..=3 {
+            for _ in 0..(1000 % arena.len()) {
+                temp = &arena[temp.next];
+            }
+            println!("{thou}000: {}", temp.value);
+            total += temp.value;
+        }
+        println!("total: {total}");
+    }
+
+    print_result(&arena);
+
+    for _ in 0..10 {
+        decrypt_once(&mut arena_pt_2);
+    }
+    print_result(&arena_pt_2);
 }
 
 // The output is wrapped in a Result to allow matching on errors
