@@ -14,7 +14,7 @@ enum Op {
 
 #[derive(Debug, Clone)]
 struct Node {
-    value: Option<i64>,
+    value: Option<f64>,
     child_1: Option<String>,
     child_2: Option<String>,
     op: Option<Op>,
@@ -36,7 +36,7 @@ fn main() {
 
                 let mut val_split = split.nth(0).unwrap().split(" ");
                 if val_split.clone().count() == 2 {
-                    let constant = val_split.nth(1).unwrap().parse::<i64>().unwrap();
+                    let constant = val_split.nth(1).unwrap().parse::<f64>().unwrap();
 
                     node = Node {
                         value: Some(constant),
@@ -69,7 +69,7 @@ fn main() {
         }
     }
 
-    fn get_value(monkey_name: String, monkeys: &HashMap<String, Node>, part_1: bool) -> (i64, Option<(i64, i64)>) {
+    fn get_value(monkey_name: String, monkeys: &HashMap<String, Node>, part_1: bool) -> (f64, Option<(f64, f64)>) {
         let monkey = monkeys.get(&monkey_name).unwrap();
         if let Some(constant) = monkey.value {
             return (constant, None);
@@ -86,7 +86,7 @@ fn main() {
                 if part_1 {
                     println!("part_1: {}", child_1_val + child_2_val);
                 }
-                if child_1_val == child_2_val { 1 } else { 0 }
+                if child_1_val == child_2_val { 1.0 } else { 0.0 }
             },
         };
 
@@ -100,7 +100,7 @@ fn main() {
     get_value("root".to_string(), &monkeys, true);
 
     let mut human = monkeys.get(&"humn".to_string()).unwrap().clone();
-    let mut bounds = (-1_000_000_000_000_000, 1_000_000_000_000_000);
+    let mut bounds = (-1_000_000_000_000_000.0, 1_000_000_000_000_000.0);
 
     human.value = Some(bounds.0);
     monkeys.insert("humn".to_string(), human.clone());
@@ -123,7 +123,7 @@ fn main() {
             bounds = (bounds.1, bounds.0);
         }
 
-        let middle = (bounds.0 + bounds.1) / 2;
+        let middle = (bounds.0 + bounds.1) / 2.0;
         human.value = Some(middle);
         monkeys.insert("humn".to_string(), human.clone());
         let middle_val = get_value("root".to_string(), &monkeys, false).1.unwrap().0;
