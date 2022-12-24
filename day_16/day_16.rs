@@ -7,14 +7,12 @@ use std::collections::HashSet;
 
 #[derive(Debug)]
 struct ValveChamber {
-    name: String,
     flow_rate: usize,
     connected_valves: Vec<String>
 }
 
 #[derive(Debug)]
 struct Node {
-    name: String,
     flow_rate: usize,
     shortest_path_to: HashMap<String, usize>
 }
@@ -47,7 +45,6 @@ fn main() {
                 let valve_strings = valve_list.split(",").map(|a| a.to_string()).collect::<Vec<String>>();
 
                 valves.insert(valve_name.clone(), ValveChamber {
-                    name: valve_name,
                     flow_rate: flow_rate,
                     connected_valves: valve_strings
                 });
@@ -59,12 +56,11 @@ fn main() {
 
     for (start_name, start_valve) in valves.iter().filter(|(n,v)| v.flow_rate > 0 || *n == "AA") {
         let mut node = Node {
-            name: start_name.clone().to_string(),
             flow_rate: start_valve.flow_rate,
             shortest_path_to: HashMap::new()
         };
 
-        for (end_name, end_valve) in valves.iter().filter(|(k,v)| v.flow_rate > 0 && *k != start_name) {
+        for (end_name, _end_valve) in valves.iter().filter(|(k,v)| v.flow_rate > 0 && *k != start_name) {
             let mut queue = Vec::from([(start_name.clone(), 0, HashSet::new())]);
             let mut shortest = 1_000_000;
 
@@ -94,73 +90,84 @@ fn main() {
     }
 
     let mut queue = Vec::new();
-    queue.push(State { 
-        cur_node: "AA".to_string(), 
-        flow_rate: 0, 
-        score: 0,
-        time: 0,
-        open_valves: Vec::new(),
-        open_times: Vec::new(),
-    });
+    queue.push((
+        State { 
+            cur_node: "AA".to_string(), 
+            flow_rate: 0, 
+            score: 0,
+            time: 0,
+            open_valves: Vec::new(),
+            open_times: Vec::new(),
+        },
+        State { 
+            cur_node: "AA".to_string(), 
+            flow_rate: 0, 
+            score: 0,
+            time: 0,
+            open_valves: Vec::new(),
+            open_times: Vec::new(),
+        }
+    ));
 
-    let max_flow_rate = nodes.iter().fold(0, |acc,(k,v)| acc + v.flow_rate);
+    let max_flow_rate = nodes.iter().fold(0, |acc,(_,v)| acc + v.flow_rate);
     println!("max_flow_rate: {max_flow_rate}");
 
     let all_useful_nodes = nodes.iter()
-        .filter(|(k,v)| v.flow_rate > 0)
-        .map(|(k,v)| k.clone()).collect::<HashSet<String>>();
+        .filter(|(_,v)| v.flow_rate > 0)
+        .map(|(k,_)| k.clone()).collect::<HashSet<String>>();
 
-    const END_TIME: usize = 30;
+    const END_TIME: usize = 26;
 
     let mut highest = 0;
-    let mut latest_time = 0;
     while queue.len() > 0 {
-        let mut cur_state = queue.pop().unwrap();
-        let node = nodes.get(&cur_state.cur_node).unwrap();
+        let (my_state, ele_state) = queue.pop().unwrap();
 
-        if cur_state.time + 1 >= END_TIME {
-            let score = cur_state.score - (cur_state.time - END_TIME) * cur_state.flow_rate;
-            if score > highest {
-                highest = score;
-                println!("cur_score: {}, flow_rate: {}, time: {}, new highest: {highest}, queue: {}", 
-                    cur_state.score, cur_state.flow_rate, cur_state.time, queue.len());
-                println!("{:?}\n{:?}", cur_state.open_valves, cur_state.open_times);
+        if my_state.time >= END_TIME && ele_state.time >= END_TIME {
+            let my_score = my_state.score - (my_state.time - END_TIME) * my_state.flow_rate;
+            let ele_score = ele_state.score - (ele_state.time - END_TIME) * ele_state.flow_rate;
+            if my_score + ele_score > highest {
+                highest = my_score + ele_score;
+                println!("me:  cur_score: {}, flow_rate: {}, time: {}, new highest: {highest}, queue: {}", 
+                    my_state.score, my_state.flow_rate, my_state.time, queue.len());
+                println!("{:?}\n{:?}", my_state.open_valves, my_state.open_times);
+                println!("ele: cur_score: {}, flow_rate: {}, time: {}, new highest: {highest}, queue: {}", 
+                    ele_state.score, ele_state.flow_rate, ele_state.time, queue.len());
+                println!("{:?}\n{:?}", ele_state.open_valves, ele_state.open_times);
             }
             continue;
         }
 
-        if node.flow_rate > 0 {
-            cur_state.open_valves.push(cur_state.cur_node.clone());
-            cur_state.open_times.push(cur_state.time);
-            cur_state.time += 1;
-            cur_state.score += cur_state.flow_rate;
-            cur_state.flow_rate += node.flow_rate;
-        }
+        let my_turn = my_state.time < ele_state.time;
+        let node = nodes.get(if my_turn { &my_state.cur_node } else { &ele_state.cur_node }).unwrap();
 
-        // even if we magically opened all valves we couldn't do better than what we found so far
-        if cur_state.score + (END_TIME - cur_state.time) * max_flow_rate < highest {
+        // A* like pruning
+        const OPTIMISTIC_AVG: usize = 80;
+        let my_max = my_state.score + (END_TIME - my_state.time) * OPTIMISTIC_AVG;
+        let ele_max = ele_state.score + (END_TIME - ele_state.time) * OPTIMISTIC_AVG;
+        if my_max + ele_max < highest {
             continue;
         }
 
-        if cur_state.flow_rate == max_flow_rate {
-            let remaining_time = END_TIME - cur_state.time;
-            cur_state.time = END_TIME;
-            cur_state.score += remaining_time * cur_state.flow_rate;
-        }
+        // if ele_state.flow_rate + my_state.flow_rate == max_flow_rate {
+        //     my_state.score += (END_TIME - my_state.time) * my_state.flow_rate;
+        //     my_state.time = END_TIME;
+        //     ele_state.score += (END_TIME - ele_state.time) * ele_state.flow_rate;
+        //     ele_state.time = END_TIME;
 
-        // if node.flow_rate > 0 && !cur_state.open_valves.contains(&node.name) {
-        //     let mut next = cur_state.clone();
-        //     next.time += 1;
-        //     next.score += cur_state.flow_rate;
-        //     next.flow_rate += node.flow_rate;
-        //     next.open_valves.push(node.name.clone());
-        //     next.open_times.push(next.time);
-
-        //     queue.push(next);
+        //     if my_state.score + ele_state.score > highest {
+        //         highest = my_state.score + ele_state.score;
+        //         println!("me:  new highest: {highest}, state: {:?}, queue: {}", 
+        //             my_state, queue.len());
+        //         println!("{:?}\n{:?}", my_state.open_valves, my_state.open_times);
+        //         println!("ele:  new highest: {highest}, state: {:?}, queue: {}", 
+        //             ele_state, queue.len());
+        //         println!("{:?}\n{:?}", ele_state.open_valves, ele_state.open_times);
+        //     }
+        //     continue;
         // }
 
-        let open = cur_state.open_valves.clone().into_iter().collect::<HashSet<String>>();
-        // println!("covered nodes: {:?}", all_nodes.union(&open.clone()));
+        let mut open = my_state.open_valves.clone().into_iter().collect::<HashSet<String>>();
+        for valve in ele_state.open_valves.clone() { open.insert(valve); }
         let mut uncovered = all_useful_nodes.difference(&open).collect::<Vec<&String>>();
         uncovered.sort_by(|a,b| 
             nodes.get(*a).unwrap().flow_rate.partial_cmp(
@@ -168,15 +175,28 @@ fn main() {
             ).unwrap()
         );
 
-        // println!("uncovered: {:?}", uncovered);
+        let mut too_long_pushed = false;
         for name in uncovered {
-            if *name == cur_state.cur_node { continue; }
-            let mut next = cur_state.clone();
+            let mut next = if my_turn { my_state.clone() } else { ele_state.clone() };
             let travel_time = node.shortest_path_to.get(name).unwrap();
-            next.time += travel_time;
-            next.score += travel_time * cur_state.flow_rate;
-            next.cur_node = name.clone();
-            queue.push(next);
+            if next.time + travel_time + 1 >= END_TIME {
+                next.score += (END_TIME - next.time) * next.flow_rate;
+                next.time = END_TIME;
+                if too_long_pushed {
+                    continue;
+                } else {
+                    too_long_pushed = true;
+                }
+            } else {
+                next.time += travel_time + 1;
+                next.score += (travel_time + 1) * next.flow_rate;
+                next.cur_node = name.clone();
+                next.open_valves.push(name.clone());
+                next.open_times.push(next.time - 1);
+                next.flow_rate += nodes.get(name).unwrap().flow_rate;
+            }
+            let next_tuple = if my_turn { (next, ele_state.clone()) } else { (my_state.clone(), next) };
+            queue.push(next_tuple);
         }
     }
 }

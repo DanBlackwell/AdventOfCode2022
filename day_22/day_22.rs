@@ -20,6 +20,20 @@ enum Instr {
 #[derive(Debug, Clone, Copy)]
 enum Heading { Up = 3, Down = 1, Left = 2, Right = 0 }
 
+#[derive(Debug, Clone, Copy)]
+enum Rotation { Left_90, Right_90, UpsideDown, Same }
+
+struct Face {
+    min_x: usize,
+    max_x: usize,
+    min_y: usize,
+    max_y: usize,
+    neighbour_up: (usize, Rotation),
+    neighbour_down: (usize, Rotation),
+    neighbour_left: (usize, Rotation),
+    neighbour_right: (usize, Rotation),
+}
+
 fn main() {
     let mut grid = Vec::new();
     let mut hit_empty = false;
@@ -107,7 +121,7 @@ fn main() {
     }
 
     // return false if hit wall
-    fn move_one(grid: &Vec<Vec<Tile>>, row_col: &mut (usize, usize), heading: Heading) -> bool {
+    fn move_one_part_one(grid: &Vec<Vec<Tile>>, row_col: &mut (usize, usize), heading: Heading) -> bool {
         let (row, col) = row_col;
         match heading {
             Heading::Up => if *row == 0 || grid[*row - 1][*col] == Tile::Nonexistant {
@@ -193,18 +207,24 @@ fn main() {
         println!("");
     }
 
-    'outer: for instr in instructions.iter() {
+    let mut row_col_part_2 = row_col;
+
+    let mut faces = Vec::new();
+
+
+
+    'instr_loop: for instr in instructions.iter() {
         match instr {
             Instr::Left => heading = turn_left(heading),
             Instr::Right => heading = turn_right(heading),
             Instr::Ahead(distance) => {
                 // println!("Moving forward {distance}");
                 for i in 0..*distance {
-                    let success = move_one(&grid, &mut row_col, heading);
-                    if !success { 
-                        // println!("Hit a wall after {i} moves");
-                        continue 'outer; 
-                    }
+                    let success = move_one_part_one(&grid, &mut row_col, heading);
+                    // if !success { 
+                    //     // println!("Hit a wall after {i} moves");
+                    //     continue 'outer; 
+                    // }
                     // print_grid(&grid, row_col, heading);
                 }
             },
@@ -212,10 +232,74 @@ fn main() {
         // print_grid(&grid, row_col, heading);
     }
 
-    println!("{:?}", instructions);
+    // println!("{:?}", instructions);
 
     println!("final row: {}, col: {}, heading: {:?}", row_col.0 + 1, row_col.1 + 1, heading);
     println!("sum: {}", (row_col.0 + 1) * 1000 + (row_col.1 + 1) * 4 + heading as usize);
+}
+
+fn get_faces(grid: &Vec<Vec<Tile>>) -> Vec<Face> {
+    let mut faces = Vec::new();
+   faces.push(Face { 
+        min_x: (2 * grid[0].len()) / 4,
+        max_x: (3 * grid[0].len()) / 4 - 1,
+        min_y: 0,
+        min_y: (1 * grid.len()) / 3 - 1,
+        neighbour_up: (1, Rotation::Same),
+        neighbour_down: (3, Rotation::Same),
+        neighbour_left: (2, Rotation::Right_90),
+        neighbour_right: (5, Rotation::UpsideDown),
+    });
+    faces.push(Face { 
+        min_x: (0 * grid[0].len()) / 4,
+        max_x: (1 * grid[0].len()) / 4 - 1,
+        min_y: (1 * grid.len()) / 3,
+        min_y: (2 * grid.len()) / 3 - 1,
+        neighbour_up: (4, Rotation::UpsideDown),
+        neighbour_down: (0, Rotation::UpsideDown),
+        neighbour_left: (5, Rotation::Left_90),
+        neighbour_right: (2, Rotation::Same),
+    });
+    faces.push(Face { 
+        min_x: (1 * grid[0].len()) / 4,
+        max_x: (2 * grid[0].len()) / 4 - 1,
+        min_y: (1 * grid.len()) / 3,
+        min_y: (2 * grid.len()) / 3 - 1,
+        neighbour_up: (0, Rotation::Right_90),
+        neighbour_down: (4, Rotation::Left_90),
+        neighbour_left: (1, Rotation::Same),
+        neighbour_right: (3, Rotation::Same),
+    });
+    faces.push(Face { 
+        min_x: (2 * grid[0].len()) / 4,
+        max_x: (3 * grid[0].len()) / 4 - 1,
+        min_y: (1 * grid.len()) / 3,
+        min_y: (2 * grid.len()) / 3 - 1,
+        neighbour_up: (0, Rotation::Same),
+        neighbour_down: (4, Rotation::Same),
+        neighbour_left: (5, Rotation::Right_90),
+        neighbour_right: (2, Rotation::Same),
+    });
+    faces.push(Face { 
+        min_x: (2 * grid[0].len()) / 4,
+        max_x: (3 * grid[0].len()) / 4 - 1,
+        min_y: (2 * grid.len()) / 3,
+        min_y: (3 * grid.len()) / 3 - 1,
+        neighbour_up: (3, Rotation::Same),
+        neighbour_down: (1, Rotation::UpsideDown),
+        neighbour_left: (2, Rotation::Left_90),
+        neighbour_right: (5, Rotation::Same),
+    });
+    faces.push(Face { 
+        min_x: (3 * grid[0].len()) / 4,
+        max_x: (4 * grid[0].len()) / 4 - 1,
+        min_y: (2 * grid.len()) / 3,
+        min_y: (3 * grid.len()) / 3 - 1,
+        neighbour_up: (3, Rotation::Left_90),
+        neighbour_down: (1, Rotation::Left_90),
+        neighbour_left: (4, Rotation::Same),
+        neighbour_right: (0, Rotation::UpsideDown),
+    }); 
 }
 
 // The output is wrapped in a Result to allow matching on errors

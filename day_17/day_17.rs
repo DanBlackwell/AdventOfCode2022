@@ -128,17 +128,26 @@ fn main() {
                             .fold(0, |total, step| total + step);
                         println!("height gained between {start} and {} = {height_gained}", stack_heights_len - CHECK_DEPTH - 1);
 
-                        let offset = (1_000_000_000_000 - start) % period;
-                        let height_to_offset = stack_heights[start..start + offset].iter()
-                            .fold(0, |total, step| total + step);
-                        let num_periods = (1_000_000_000_000 - start) / period;
+                        fn height_at(count: usize, start: usize, period: usize, stack_heights: &Vec<usize>) -> usize {
+                            let height_gained = stack_heights[start..=(start + period)].iter()
+                                .fold(0, |total, step| total + step);
+                            let offset = (count - start) % period;
 
-                        let height_to_start = stack_heights[0..start].iter()
-                            .fold(0, |total, step| total + step);
-                        println!("Need to do another {} reps, which is another {} from now", 1_000_000_000_000 - rock_count, offset);
-                        let total_height = height_to_start + height_gained * num_periods + height_to_offset;
+                            let height_to_offset = stack_heights[start..start + offset].iter()
+                                .fold(0, |total, step| total + step);
+                            let num_periods = (count - start) / period;
 
-                        println!("total_height: {total_height}");
+                            let height_to_start = stack_heights[0..start].iter()
+                                .fold(0, |total, step| total + step);
+                            let total_height = height_to_start + height_gained * num_periods + height_to_offset;
+
+                            return total_height;
+                        }
+
+                        println!("height at 2022: {}", height_at(2022, start, period, &stack_heights));
+                        println!("height at 1_000_000_000: {}", height_at(1_000_000_000, start, period, &stack_heights));
+
+                        // println!("total_height: {total_height}");
                         return;
                     }
                 }
