@@ -15,7 +15,7 @@ enum Move {
 }
 
 fn main() {
-    let mut elves = Vec::new();
+    let mut elves = HashSet::new();
 
     if let Ok(lines) = read_lines("./input.txt") {
         // Consumes the iterator, returns an (Optional) String
@@ -26,7 +26,7 @@ fn main() {
                 for (column, letter) in line.chars().enumerate() {
                     match letter {
                         '.' => {},
-                        '#' => elves.push(Coord { x: column as i64, y: line_num as i64 }),
+                        '#' => _ = elves.insert(Coord { x: column as i64, y: line_num as i64 }),
                          _  => panic!(""),
                     }
                 }
@@ -34,7 +34,7 @@ fn main() {
         }
     }
 
-    fn check_no_elves_adjacent(elves: &Vec<Coord>, elf: Coord) -> bool {
+    fn check_no_elves_adjacent(elves: &HashSet<Coord>, elf: Coord) -> bool {
         for x in (elf.x - 1)..=(elf.x + 1) {
             for y in (elf.y - 1)..=(elf.y + 1) {
                 if x == elf.x && y == elf.y { continue; }
@@ -46,7 +46,7 @@ fn main() {
         return true;
     }
 
-    fn calc_proposed(move_index: usize, elves: &Vec<Coord>, elf: Coord) -> (bool, Coord) {
+    fn calc_proposed(move_index: usize, elves: &HashSet<Coord>, elf: Coord) -> (bool, Coord) {
         let mut next_move_dir = match move_index % 4 {
             0 => Move::North, 1 => Move::South, 2 => Move::West, 3 => Move::East, _ => panic!("")
         };
@@ -76,7 +76,7 @@ fn main() {
         return (false, elf);
     }
 
-    fn print_grid(elves: &Vec<Coord>) {
+    fn print_grid(elves: &HashSet<Coord>) {
         let (min_x, max_x, min_y, max_y) = elves.iter().fold((1_000_000, -1_000_000, 1_000_000, -1_000_000), |min_max, pos| {
             // println!("min_max: {:?}, pos: {:?}", min_max, pos);
             let mut res = min_max;
@@ -120,13 +120,22 @@ fn main() {
  
     print_grid(&elves);
 
-    for round in 0..10 {
+    let mut round = 0;
+    loop {
+        if round == 10 { print_grid(&elves); }
+
         let mut proposed = Vec::new();
         let mut moves = HashSet::new();
         let mut clashes = HashSet::new();
-        for elf in &elves {
+
+        let mut moves_needed = false;
+
+        let elves_vec = elves.clone().into_iter().collect::<Vec<Coord>>();
+
+        for elf in &elves_vec {
             let mut next_move = *elf;
             if !check_no_elves_adjacent(&elves, *elf) {
+                moves_needed = true;
                 let (valid, next) = calc_proposed(round, &elves, *elf);
                 if valid { next_move = next; }
             }
@@ -137,22 +146,22 @@ fn main() {
             }
         }
 
-        let mut final_pos = Vec::new();
-        for (index, elf) in elves.iter().enumerate() {
+        if !moves_needed { println!("static at move {}", round + 1); break; }
+
+        let mut final_pos = HashSet::new();
+        for (index, elf) in elves_vec.iter().enumerate() {
             let next = proposed[index];
             if clashes.contains(&next) {
-                final_pos.push(*elf);
+                final_pos.insert(*elf);
             } else {
-                final_pos.push(next);
+                final_pos.insert(next);
             }
         }
 
         // println!("{:?}", (min_x, max_x, min_y, max_y));
         elves = final_pos;
+        round += 1;
     }
-
-    print_grid(&elves);
-
 }
 
 // The output is wrapped in a Result to allow matching on errors
